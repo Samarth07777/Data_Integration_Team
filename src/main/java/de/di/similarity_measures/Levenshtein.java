@@ -1,86 +1,70 @@
 package de.di.similarity_measures;
 
-import lombok.AllArgsConstructor;
-
 import java.util.Arrays;
 
-@AllArgsConstructor
 public class Levenshtein implements SimilarityMeasure {
 
-    public static int min(int... numbers) {
-        return Arrays.stream(numbers).min().orElse(Integer.MAX_VALUE);
+    private final boolean useDamerau;
+
+    public Levenshtein(boolean useDamerau) {
+        this.useDamerau = useDamerau;
     }
 
-    // The choice of whether Levenshtein or DamerauLevenshtein should be calculated.
-    private final boolean withDamerau;
-
-    /**
-     * Calculates the Levenshtein similarity of the two input strings.
-     * The Levenshtein similarity is defined as "1 - normalized Levenshtein distance".
-     * @param string1 The first string argument for the similarity calculation.
-     * @param string2 The second string argument for the similarity calculation.
-     * @return The (Damerau) Levenshtein similarity of the two arguments.
-     */
     @Override
-    public double calculate(final String string1, final String string2) {
-        double levenshteinSimilarity = 0;
+    public double calculate(String input1, String input2) {
+        input1 = input1 == null ? "" : input1;
+        input2 = input2 == null ? "" : input2;
 
-        int[] upperupperLine = new int[string1.length() + 1];   // line for Demarau lookups
-        int[] upperLine = new int[string1.length() + 1];        // line for regular Levenshtein lookups
-        int[] lowerLine = new int[string1.length() + 1];        // line to be filled next by the algorithm
+        String[] tokensA = input1.split("");
+        String[] tokensB = input2.split("");
 
-        // Fill the first line with the initial positions (= edits to generate string1 from nothing)
-        for (int i = 0; i <= string1.length(); i++)
-            upperLine[i] = i;
-
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //                                      DATA INTEGRATION ASSIGNMENT                                           //
-        // Use the three provided lines to successively calculate the Levenshtein matrix with the dynamic programming //
-        // algorithm. Depending on whether the inner flag withDamerau is set, the Damerau extension rule should be    //
-        // used during calculation or not. Hint: Implement the Levenshtein algorithm here first, then copy the code   //
-        // to the String tuple function and adjust it a bit to work on the arrays - the algorithm is the same.        //
-
-
-
-        //                                                                                                            //
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        return levenshteinSimilarity;
+        return computeNormalizedDistance(tokensA, tokensB);
     }
 
-    /**
-     * Calculates the Levenshtein similarity of the two input string lists.
-     * The Levenshtein similarity is defined as "1 - normalized Levenshtein distance".
-     * For string lists, we consider each list as an ordered list of tokens and calculate the distance as the number of
-     * token insertions, deletions, replacements (and swaps) that transform one list into the other.
-     * @param strings1 The first string list argument for the similarity calculation.
-     * @param strings2 The second string list argument for the similarity calculation.
-     * @return The (multiset) Levenshtein similarity of the two arguments.
-     */
     @Override
-    public double calculate(final String[] strings1, final String[] strings2) {
-        double levenshteinSimilarity = 0;
+    public double calculate(String[] tokensA, String[] tokensB) {
+        if (tokensA == null) tokensA = new String[0];
+        if (tokensB == null) tokensB = new String[0];
 
-        int[] upperupperLine = new int[strings1.length + 1];   // line for Damerau lookups
-        int[] upperLine = new int[strings1.length + 1];        // line for regular Levenshtein lookups
-        int[] lowerLine = new int[strings1.length + 1];        // line to be filled next by the algorithm
+        return computeNormalizedDistance(tokensA, tokensB);
+    }
 
-        // Fill the first line with the initial positions (= edits to generate string1 from nothing)
-        for (int i = 0; i <= strings1.length; i++)
-            upperLine[i] = i;
+    private double computeNormalizedDistance(String[] tokensA, String[] tokensB) {
+        int lenA = tokensA.length;
+        int lenB = tokensB.length;
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //                                      DATA INTEGRATION ASSIGNMENT                                           //
-        // Use the three provided lines to successively calculate the Levenshtein matrix with the dynamic programming //
-        // algorithm. Depending on whether the inner flag withDamerau is set, the Damerau extension rule should be    //
-        // used during calculation or not. Hint: Implement the Levenshtein algorithm above first, then copy the code  //
-        // to this function and adjust it a bit to work on the arrays - the algorithm is the same.                    //
+        if (lenA == 0 && lenB == 0) {
+            return 1.0;
+        }
 
+        int[][] distance = new int[lenA + 1][lenB + 1];
 
+        for (int i = 0; i <= lenA; i++) distance[i][0] = i;
+        for (int j = 0; j <= lenB; j++) distance[0][j] = j;
 
-        //                                                                                                            //
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        for (int i = 1; i <= lenA; i++) {
+            for (int j = 1; j <= lenB; j++) {
+                int cost = tokensA[i - 1].equals(tokensB[j - 1]) ? 0 : 1;
 
-        return levenshteinSimilarity;
+                int insertion = distance[i][j - 1] + 1;
+                int deletion = distance[i - 1][j] + 1;
+                int substitution = distance[i - 1][j - 1] + cost;
+
+                distance[i][j] = Math.min(Math.min(insertion, deletion), substitution);
+
+                if (useDamerau && i > 1 && j > 1
+                        && tokensA[i - 1].equals(tokensB[j - 2])
+                        && tokensA[i - 2].equals(tokensB[j - 1])) {
+                    int transposition = distance[i - 2][j - 2] + cost;
+                    distance[i][j] = Math.min(distance[i][j], transposition);
+                }
+            }
+        }
+
+        int rawDistance = distance[lenA][lenB];
+        int maxLength = Math.max(lenA, lenB);
+
+        return maxLength == 0 ? 1.0 : 1.0 - ((double) rawDistance / maxLength);
     }
 }
+

@@ -1,7 +1,5 @@
 package de.di.data_profiling.structures;
 
-import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import lombok.Getter;
 
@@ -12,68 +10,73 @@ import java.util.stream.Collectors;
 public class PositionListIndex {
 
     private final AttributeList attributes;
-    private final List<IntArrayList> clusters;
-    private final int[] invertedClusters;
+    private final List<IntArrayList> valueGroups;
+    private final int[] recordToGroup;
 
-    public PositionListIndex(final AttributeList attributes, final String[] values) {
+    public PositionListIndex(final AttributeList attributes, final String[] columnValues) {
         this.attributes = attributes;
-        this.clusters = this.calculateClusters(values);
-        this.invertedClusters = this.calculateInverted(this.clusters, values.length);
+        this.valueGroups = buildGroups(columnValues);
+        this.recordToGroup = mapRecordsToGroups(this.valueGroups, columnValues.length);
     }
 
-    public PositionListIndex(final AttributeList attributes, final List<IntArrayList> clusters, int relationLength) {
+    public PositionListIndex(final AttributeList attributes, final List<IntArrayList> groups, final int totalRecords) {
         this.attributes = attributes;
-        this.clusters = clusters;
-        this.invertedClusters = this.calculateInverted(this.clusters, relationLength);
+        this.valueGroups = groups;
+        this.recordToGroup = mapRecordsToGroups(groups, totalRecords);
     }
 
-    private List<IntArrayList> calculateClusters(final String[] values) {
-        Map<String, IntArrayList> invertedIndex = new HashMap<>(values.length);
-        for (int recordIndex = 0; recordIndex < values.length; recordIndex++) {
-            invertedIndex.putIfAbsent(values[recordIndex], new IntArrayList());
-            invertedIndex.get(values[recordIndex]).add(recordIndex);
+    private List<IntArrayList> buildGroups(final String[] values) {
+        Map<String, IntArrayList> buckets = new HashMap<>();
+        for (int i = 0; i < values.length; i++) {
+            buckets.computeIfAbsent(values[i], k -> new IntArrayList()).add(i);
         }
-        return invertedIndex.values().stream().filter(cluster -> cluster.size() > 1).collect(Collectors.toList());
+        return buckets.values().stream()
+                .filter(group -> group.size() > 1)
+                .collect(Collectors.toList());
     }
 
-    private int[] calculateInverted(List<IntArrayList> clusters, int relationLength) {
-        int[] invertedClusters = new int[relationLength];
-        Arrays.fill(invertedClusters, -1);
-        for (int clusterIndex = 0; clusterIndex < clusters.size(); clusterIndex++)
-            for (int recordIndex : clusters.get(clusterIndex))
-                invertedClusters[recordIndex] = clusterIndex;
-        return invertedClusters;
+    private int[] mapRecordsToGroups(final List<IntArrayList> groups, int totalSize) {
+        int[] mapping = new int[totalSize];
+        Arrays.fill(mapping, -1);
+        for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
+            for (int recordId : groups.get(groupIndex)) {
+                mapping[recordId] = groupIndex;
+            }
+        }
+        return mapping;
     }
 
     public boolean isUnique() {
-        return this.clusters.isEmpty();
+        return this.valueGroups.isEmpty();
     }
 
-    public int relationLength() {
-        return this.invertedClusters.length;
+    public int size() {
+        return this.recordToGroup.length;
     }
 
     public PositionListIndex intersect(PositionListIndex other) {
-        List<IntArrayList> clustersIntersection = this.intersect(this.clusters, other.getInvertedClusters());
-        AttributeList attributesUnion = this.attributes.union(other.getAttributes());
-
-        return new PositionListIndex(attributesUnion, clustersIntersection, this.relationLength());
+        List<IntArrayList> intersectedGroups = findOverlapGroups(this.valueGroups, other.recordToGroup);
+        AttributeList mergedAttributes = this.attributes.union(other.getAttributes());
+        return new PositionListIndex(mergedAttributes, intersectedGroups, this.size());
     }
 
-    private List<IntArrayList> intersect(List<IntArrayList> clusters, int[] invertedClusters) {
-        List<IntArrayList> clustersIntersection = new ArrayList<>();
+    private List<IntArrayList> findOverlapGroups(List<IntArrayList> sourceGroups, int[] otherRecordGroupMap) {
+        Map<String, IntArrayList> groupingMap = new HashMap<>();
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //                                      DATA INTEGRATION ASSIGNMENT                                           //
-        // Calculate the intersection of one PLI's clusters and another PLI's (conveniently already inverted)         //
-        // invertedClusters. The clustersIntersection is a new list that stores the intersection result. Note that    //
-        // the clusters are "Stripped Partitions", which means that only clusters of size >1 are part of the result.  //
+        for (IntArrayList group : sourceGroups) {
+            for (int record : group) {
+                int otherGroupId = otherRecordGroupMap[record];
+                if (otherGroupId == -1) continue;
 
+                // Construct a flat composite key to identify intersections
+                String key = group.hashCode() + "-" + otherGroupId;
+                groupingMap.computeIfAbsent(key, k -> new IntArrayList()).add(record);
+            }
+        }
 
-
-        //                                                                                                            //
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        return clustersIntersection;
+        // Keep only valid (stripped) clusters with size > 1
+        return groupingMap.values().stream()
+                .filter(g -> g.size() > 1)
+                .collect(Collectors.toList());
     }
 }

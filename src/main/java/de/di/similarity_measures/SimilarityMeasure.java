@@ -6,3 +6,6 @@ public interface SimilarityMeasure {
 
     double calculate(final String[] strings1, final String[] strings2);
 }
+
+
+

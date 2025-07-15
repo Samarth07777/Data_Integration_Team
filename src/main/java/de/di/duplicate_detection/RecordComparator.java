@@ -49,19 +49,27 @@ public class RecordComparator {
     public double compare(String[] tuple1, String[] tuple2) {
         double recordSimilarity = 0;
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //                                      DATA INTEGRATION ASSIGNMENT                                           //
-        // Compare the two tuples with the similarity functions specified by the internal AttrSimWeight objects.      //
-        // To calculate the overall tuple similarity, calculate the weighted average similarity of all individual     //
-        // attribute similarities; the weights are also stored in the internal AttrSimWeight objects.                 //
+        for (AttrSimWeight attrSimWeight : attrSimWeights) {
+            int attributeIndex = attrSimWeight.getAttribute();
+            SimilarityMeasure similarityMeasure = attrSimWeight.getSimilarityMeasure();
+            double weight = attrSimWeight.getWeight();
 
+            // Safety check: avoid index out of bounds
+            if (attributeIndex >= tuple1.length || attributeIndex >= tuple2.length) {
+                continue;
+            }
 
+            String value1 = tuple1[attributeIndex];
+            String value2 = tuple2[attributeIndex];
 
-        //                                                                                                            //
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            double similarity = similarityMeasure.calculate(value1, value2);
+
+            recordSimilarity += similarity * weight;
+        }
 
         return recordSimilarity;
     }
+
 
     /**
      * Decides if the provided similarity is higher than the internal similarity threshold and, therefore,
@@ -73,3 +81,6 @@ public class RecordComparator {
         return similarity > this.threshold;
     }
 }
+
+
+

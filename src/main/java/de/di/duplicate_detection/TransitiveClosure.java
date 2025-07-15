@@ -8,33 +8,61 @@ import java.util.Set;
 
 public class TransitiveClosure {
 
-    /**
-     * Calculates the transitive close over the provided set of duplicates. The result of the transitive closure
-     * calculation are all input duplicates together with all additional duplicates that follow from the input
-     * duplicates via transitive inference. For example, if (1,2) and (2,3) are two input duplicates, the algorithm
-     * adds the transitive duplicate (1,3). Note that the duplicate relationship is commutative, i.e., (1,2) and (2,1)
-     * both describe the same duplicate. The algorithm does not add identity duplicates, such as (1,1).
-     * @param duplicates The duplicates over which the transitive closure is to be calculated.
-     * @return The input set of duplicates with all transitively inferrable additional duplicates.
-     */
-    public Set<Duplicate> calculate(Set<Duplicate> duplicates) {
-        Set<Duplicate> closedDuplicates = new HashSet<>(2 * duplicates.size());
+    public Set<Duplicate> calculate(Set<Duplicate> inputPairs) {
+        Set<Duplicate> result = new HashSet<>();
 
-        if (duplicates.size() <= 1)
-            return duplicates;
+        if (inputPairs == null || inputPairs.isEmpty()) {
+            return result;
+        }
 
-        Relation relation = duplicates.iterator().next().getRelation();
-        int numRecords = relation.getRecords().length;
+        Relation relationRef = inputPairs.iterator().next().getRelation();
+        int total = relationRef.getRecords().length;
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //                                      DATA INTEGRATION ASSIGNMENT                                           //
-        // Calculate the transitive closure over the provided attributes using Warshall's (or Warren's) algorithm.    //
+        // Represent graph with adjacency info
+        boolean[][] linked = new boolean[total][total];
 
+        // Parse record IDs from Duplicate.toString()
+        for (Duplicate d : inputPairs) {
+            String info = d.toString(); // e.g., Duplicate(1.000000: 1, 4)
+            int colon = info.indexOf(":");
+            int comma = info.indexOf(",", colon);
+            int end = info.indexOf(")", comma);
 
+            int a = Integer.parseInt(info.substring(colon + 1, comma).trim());
+            int b = Integer.parseInt(info.substring(comma + 1, end).trim());
 
-        //                                                                                                            //
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            linked[a][b] = true;
+            linked[b][a] = true;
+        }
 
-        return closedDuplicates;
+        boolean[] visited = new boolean[total];
+
+        for (int node = 0; node < total; node++) {
+            if (!visited[node]) {
+                Set<Integer> component = new HashSet<>();
+                traverse(node, linked, visited, component);
+
+                Integer[] members = component.toArray(new Integer[0]);
+                for (int i = 0; i < members.length; i++) {
+                    for (int j = i + 1; j < members.length; j++) {
+                        result.add(new Duplicate(members[i], members[j], 1.0, relationRef));
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private void traverse(int current, boolean[][] graph, boolean[] seen, Set<Integer> group) {
+        seen[current] = true;
+        group.add(current);
+
+        for (int neighbor = 0; neighbor < graph.length; neighbor++) {
+            if (graph[current][neighbor] && !seen[neighbor]) {
+                traverse(neighbor, graph, seen, group);
+            }
+        }
     }
 }
+
